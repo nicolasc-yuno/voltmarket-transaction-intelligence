@@ -30,13 +30,27 @@ from src.contracts.schemas import (
 # Segment-key to human-readable label mapping for titles/descriptions
 _SEGMENT_LABELS = {
     "MX|Mastercard|Debit|BBVA":         "BBVA Mexico (Mastercard Debit)",
+    "MX|BBVA":                           "BBVA Mexico",
+    "MX|BBVA|Mastercard|Debit":         "BBVA Mexico (Mastercard Debit)",
+    "MX|BBVA|Visa|Credit":              "BBVA Mexico (Visa Credit)",
+    "$10-50":                             "Low-value ($10-$50)",
+    "$50-100":                            "Mid-value ($50-$100)",
     "$100-200":                           "High-value ($100-$200)",
     "$200-350":                           "High-value ($200-$350)",
     "$350-500":                           "Premium ($350-$500)",
     "evening_17_20":                      "Evening (17h-20h)",
+    "night_20_24":                        "Night (20h-24h)",
+    "late_night_0_6":                     "Late Night (0h-6h)",
+    "morning_6_12":                       "Morning (6h-12h)",
+    "afternoon_12_17":                    "Afternoon (12h-17h)",
     "MX":                                 "Mexico",
     "BR":                                 "Brazil",
     "CO":                                 "Colombia",
+    "Credit":                             "Credit Cards",
+    "Debit":                              "Debit Cards",
+    "Visa":                               "Visa",
+    "Mastercard":                         "Mastercard",
+    "Amex":                               "Amex",
 }
 
 
@@ -94,8 +108,9 @@ def rank_insights(anomalies: pl.DataFrame, top_n: int = 5, min_n: int = 3) -> pl
     From the anomaly DataFrame, select flagged anomalies, compute a weighted
     score, and return the top_n as a DataFrame matching INSIGHT_SCHEMA.
 
-    If fewer than min_n anomalies are flagged, pad with the highest-impact
-    non-flagged segments so the dashboard always receives at least min_n insights.
+    Uses a specificity bonus so root-cause segments (issuer-level, composite)
+    rank above broad symptom segments (card_brand, country, card_type).
+    Enforces diversity: at most one insight per segment_type category.
     """
     flagged = anomalies.filter(pl.col("is_anomaly")).clone()
 
@@ -108,26 +123,70 @@ def rank_insights(anomalies: pl.DataFrame, top_n: int = 5, min_n: int = 3) -> pl
         )
         flagged = pl.concat([flagged, rest])
 
+    # ---- Specificity bonus: root-cause segments score higher ----
+    specificity_map = {
+        "issuer_brand_type": 1.0, "composite": 1.0,
+        "country_issuer": 0.9, "issuer": 0.85,
+        "country_brand_type": 0.7, "country_brand": 0.6,
+        "amount_bucket": 0.8, "hour_bucket": 0.8,
+        "country": 0.3, "card_brand": 0.2, "card_type": 0.2,
+    }
+    specificity_scores = [
+        specificity_map.get(t, 0.5) for t in flagged["segment_type"].to_list()
+    ]
+
     # ---- Normalised sub-scores ----
     impact_norm = _normalise_column(flagged["estimated_revenue_impact_usd"])
     magnitude_norm = _normalise_column(flagged["rate_change"].abs())
-    # Significance: lower p-value = better → invert
     significance_norm = _normalise_column(1.0 - flagged["p_value"])
-    breadth_norm = _normalise_column(flagged["affected_transactions"].cast(pl.Float64))
+    specificity_norm = pl.Series(specificity_scores)
 
     weighted_score = (
-        0.40 * impact_norm
+        0.30 * impact_norm
         + 0.30 * magnitude_norm
-        + 0.20 * significance_norm
-        + 0.10 * breadth_norm
+        + 0.15 * significance_norm
+        + 0.25 * specificity_norm
     )
 
     flagged = flagged.with_columns(
         pl.Series("_score", weighted_score.to_list(), dtype=pl.Float64)
     )
 
-    # Sort descending by score, take top_n
-    flagged = flagged.sort("_score", descending=True).head(top_n)
+    # ---- Diverse selection: pick top per segment category, then fill ----
+    # Group segment types into categories for diversity
+    category_map = {
+        "issuer": "issuer", "country_issuer": "issuer",
+        "issuer_brand_type": "issuer", "composite": "issuer",
+        "amount_bucket": "amount", "hour_bucket": "time",
+        "country": "geo", "country_brand": "geo",
+        "country_brand_type": "geo",
+        "card_brand": "instrument", "card_type": "instrument",
+    }
+    categories = [category_map.get(t, "other") for t in flagged["segment_type"].to_list()]
+    flagged = flagged.with_columns(pl.Series("_category", categories))
+
+    sorted_flagged = flagged.sort("_score", descending=True)
+    selected_indices = []
+    seen_categories: set[str] = set()
+
+    # First pass: pick the best from each category
+    for i, row in enumerate(sorted_flagged.iter_rows(named=True)):
+        cat = row["_category"]
+        if cat not in seen_categories:
+            selected_indices.append(i)
+            seen_categories.add(cat)
+        if len(selected_indices) >= top_n:
+            break
+
+    # Second pass: fill remaining slots with highest scoring
+    if len(selected_indices) < top_n:
+        for i in range(len(sorted_flagged)):
+            if i not in selected_indices:
+                selected_indices.append(i)
+            if len(selected_indices) >= top_n:
+                break
+
+    flagged = sorted_flagged[sorted(selected_indices)].sort("_score", descending=True).drop("_category")
 
     # Build insight rows
     rows = []
