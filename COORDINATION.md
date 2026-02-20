@@ -45,10 +45,10 @@ Update your section when you start, make progress, or finish. **Always commit + 
 
 ### Session D: Visualization
 - **Branch:** `feature/visualization`
-- **Status:** NOT STARTED
-- **Files:** `src/visualization/dashboard.py`
-- **Output:** `output/` (HTML dashboard, PNG charts)
-- **Notes:**
+- **Status:** COMPLETE
+- **Files:** `src/visualization/charts.py`, `src/visualization/dashboard.py`
+- **Output:** `output/` (6 PNG charts, standalone HTML dashboard)
+- **Notes:** 6 Plotly charts (headline trend, country breakdown, issuer heatmap, waterfall, amount distribution, hourly pattern). Streamlit dashboard with KPI cards, 5 insight cards with severity badges, and "aha moment" callout. Mock data generators match all contract schemas. CLI: `python -m src.visualization.charts` for static exports, `streamlit run src/visualization/dashboard.py` for interactive. Falls back to mock data if upstream parquet files are missing.
 
 ## Integration Checklist
 
