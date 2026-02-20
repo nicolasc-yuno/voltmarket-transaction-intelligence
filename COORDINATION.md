@@ -24,10 +24,10 @@ Update your section when you start, make progress, or finish. **Always commit + 
 
 ### Session A: Data Generation
 - **Branch:** `feature/data-generator`
-- **Status:** NOT STARTED
+- **Status:** COMPLETE
 - **Files:** `src/data_generator/generate.py`
 - **Output:** `data/raw/transactions.parquet`
-- **Notes:**
+- **Notes:** 8,000 transactions across 6 weeks. Weeks 1-3: ~81% approval, Weeks 4-6: ~62%. Three patterns embedded: BBVA MX (82%→38%), High-value >$200 (79%→56%), Post-8PM (77%→56%). Parquet pushed to feature/data-generator branch (force-added, bypasses .gitignore). Run: `python -m src.data_generator.generate`
 
 ### Session B: Pipeline
 - **Branch:** `feature/pipeline`
