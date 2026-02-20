@@ -24,6 +24,7 @@ from src.contracts.schemas import (
     ANOMALIES_OUTPUT_PATH,
     INSIGHTS_OUTPUT_PATH,
     INSIGHTS_JSON_PATH,
+    SUMMARY_OUTPUT_PATH,
 )
 
 
@@ -41,11 +42,13 @@ _SEGMENT_LABELS = {
 
 
 def _severity(impact_usd: float) -> str:
-    if impact_usd > 100_000:
-        return "critical"
+    # Thresholds calibrated to the corrected monthly revenue impact formula
+    # (weekly txns × avg_ticket × |rate_change| × 4.33).
     if impact_usd > 50_000:
+        return "critical"
+    if impact_usd > 20_000:
         return "high"
-    if impact_usd > 10_000:
+    if impact_usd > 5_000:
         return "medium"
     return "low"
 
@@ -187,7 +190,7 @@ def build_summary(anomalies: pl.DataFrame, insights: pl.DataFrame) -> dict:
     }
 
 
-def save_summary(summary: dict, path: str = "data/analytics/summary.json") -> None:
+def save_summary(summary: dict, path: str = SUMMARY_OUTPUT_PATH) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as fh:
         json.dump(summary, fh, indent=2)

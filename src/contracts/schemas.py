@@ -106,6 +106,11 @@ ANOMALY_SCHEMA = {
 }
 
 ANOMALIES_OUTPUT_PATH = "data/analytics/anomalies.parquet"
+SUMMARY_OUTPUT_PATH = "data/analytics/summary.json"
+
+# Revenue impact normalisation constants
+WEEKS_PER_PERIOD = 3      # Each baseline/current window covers 3 weeks
+WEEKS_PER_MONTH = 4.33    # Multiplier to convert weekly impact to monthly
 
 
 # =============================================================================

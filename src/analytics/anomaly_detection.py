@@ -8,7 +8,13 @@ calculates z-scores, p-values, and flags statistically significant anomalies.
 import os
 import numpy as np
 import polars as pl
-from scipy import stats
+
+try:
+    from scipy import stats as _scipy_stats
+    _SCIPY_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _scipy_stats = None
+    _SCIPY_AVAILABLE = False
 
 from src.contracts.schemas import (
     SEGMENT_SCHEMA,
@@ -20,6 +26,8 @@ from src.contracts.schemas import (
     COUNTRIES,
     CARD_BRANDS,
     ISSUER_BANKS,
+    WEEKS_PER_PERIOD,
+    WEEKS_PER_MONTH,
 )
 
 
@@ -175,7 +183,16 @@ def _proportions_z_test(count1: int, nobs1: int, count2: int, nobs2: int) -> flo
     if se == 0:
         return 1.0
     z = (p1 - p2) / se
-    p_value = 2 * (1 - stats.norm.cdf(abs(z)))
+    abs_z = abs(z)
+
+    if _SCIPY_AVAILABLE:
+        p_value = 2 * (1 - _scipy_stats.norm.cdf(abs_z))
+    else:
+        # Rational approximation to Φ(x) (Abramowitz & Stegun, max error < 7.5e-8)
+        t = 1.0 / (1.0 + 0.2316419 * abs_z)
+        poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
+        p_value = 2.0 * poly * np.exp(-0.5 * abs_z ** 2) / (2 * np.pi) ** 0.5
+
     return float(p_value)
 
 
@@ -239,7 +256,17 @@ def detect_anomalies(segments: pl.DataFrame) -> pl.DataFrame:
     baseline = _deduplicate_by_segment_key(baseline_raw)
     current = _deduplicate_by_segment_key(current_raw).drop("segment_type")
 
-    joined = baseline.join(current, on="segment_key", how="inner")
+    # Left join: keeps segments present in baseline even if absent in weeks 4-6
+    # (e.g. a segment that disappeared — rate dropped to 0).
+    joined = baseline.join(current, on="segment_key", how="left")
+
+    # Fill nulls for segments with no current-period data (rate = 0, txns = 0)
+    joined = joined.with_columns([
+        pl.col("current_rate").fill_null(0.0),
+        pl.col("current_approved").fill_null(0),
+        pl.col("current_total").fill_null(0),
+        pl.col("current_amount_usd").fill_null(0.0),
+    ])
 
     # Rate change
     joined = joined.with_columns(
@@ -270,13 +297,15 @@ def detect_anomalies(segments: pl.DataFrame) -> pl.DataFrame:
         (pl.col("current_amount_usd") / pl.col("current_total")).alias("avg_ticket_usd")
     )
 
-    # Revenue impact: affected_transactions * avg_ticket * |rate_change| * 4.33
+    # Revenue impact: weekly_txns * avg_ticket * |rate_change| * weeks_per_month
+    # Divide by WEEKS_PER_PERIOD (3) because affected_transactions covers a 3-week
+    # window; we want the per-week rate before scaling to a monthly figure.
     joined = joined.with_columns(
         (
-            pl.col("affected_transactions")
+            (pl.col("affected_transactions") / WEEKS_PER_PERIOD)
             * pl.col("avg_ticket_usd")
             * pl.col("rate_change").abs()
-            * 4.33
+            * WEEKS_PER_MONTH
         ).alias("estimated_revenue_impact_usd")
     )
 
