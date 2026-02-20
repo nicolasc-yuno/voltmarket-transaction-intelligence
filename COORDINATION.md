@@ -38,10 +38,10 @@ Update your section when you start, make progress, or finish. **Always commit + 
 
 ### Session C: Analytics
 - **Branch:** `feature/analytics`
-- **Status:** NOT STARTED
-- **Files:** `src/analytics/anomaly_detection.py`, `src/analytics/insights.py`
-- **Output:** `data/analytics/insights.json`, `data/analytics/anomalies.parquet`
-- **Notes:**
+- **Status:** COMPLETE
+- **Files:** `src/analytics/anomaly_detection.py`, `src/analytics/insights.py`, `src/analytics/__main__.py`
+- **Output:** `data/analytics/insights.json`, `data/analytics/insights.parquet`, `data/analytics/anomalies.parquet`, `data/analytics/summary.json`
+- **Notes:** Deduplicates segment_keys across segment_types before z-score computation. Falls back to mock data if pipeline output missing. BBVA Mexico ranks #1 (~$181K monthly impact, 41pp drop). `python -m src.analytics` works. All schemas match contracts.
 
 ### Session D: Visualization
 - **Branch:** `feature/visualization`
@@ -54,7 +54,7 @@ Update your section when you start, make progress, or finish. **Always commit + 
 
 - [x] Data generator produces valid parquet matching `RAW_TRANSACTION_SCHEMA`
 - [x] Pipeline reads raw data and outputs segments + trends
-- [ ] Analytics reads segments and outputs ranked insights + anomalies
+- [x] Analytics reads segments and outputs ranked insights + anomalies
 - [ ] Visualization reads all layers and produces dashboard
 - [ ] CLI entrypoint runs full pipeline end-to-end
 - [ ] README complete with setup, architecture, findings
