@@ -39,7 +39,6 @@ def _generate_mock_segments() -> pl.DataFrame:
       2. High-value transaction degradation
       3. Evening hour underperformance
     """
-    rng = np.random.default_rng(42)
     rows = []
 
     # --- Issuer-level segments (composite: country|brand|type|issuer) ---
@@ -293,8 +292,13 @@ def detect_anomalies(segments: pl.DataFrame) -> pl.DataFrame:
     )
 
     # Average ticket USD (from current period)
+    # Guard against div-by-zero for segments that disappeared in weeks 4-6
+    # (current_total == 0 due to left-join null fill).
     joined = joined.with_columns(
-        (pl.col("current_amount_usd") / pl.col("current_total")).alias("avg_ticket_usd")
+        pl.when(pl.col("current_total") > 0)
+        .then(pl.col("current_amount_usd") / pl.col("current_total"))
+        .otherwise(0.0)
+        .alias("avg_ticket_usd")
     )
 
     # Revenue impact: weekly_txns * avg_ticket * |rate_change| * weeks_per_month

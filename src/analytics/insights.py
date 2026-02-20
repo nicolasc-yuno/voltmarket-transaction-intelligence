@@ -19,7 +19,6 @@ from typing import Optional
 import polars as pl
 
 from src.contracts.schemas import (
-    ANOMALY_SCHEMA,
     INSIGHT_SCHEMA,
     ANOMALIES_OUTPUT_PATH,
     INSIGHTS_OUTPUT_PATH,
@@ -90,16 +89,24 @@ def _normalise_column(series: pl.Series) -> pl.Series:
     return (series - mn) / (mx - mn)
 
 
-def rank_insights(anomalies: pl.DataFrame, top_n: int = 5) -> pl.DataFrame:
+def rank_insights(anomalies: pl.DataFrame, top_n: int = 5, min_n: int = 3) -> pl.DataFrame:
     """
     From the anomaly DataFrame, select flagged anomalies, compute a weighted
     score, and return the top_n as a DataFrame matching INSIGHT_SCHEMA.
+
+    If fewer than min_n anomalies are flagged, pad with the highest-impact
+    non-flagged segments so the dashboard always receives at least min_n insights.
     """
     flagged = anomalies.filter(pl.col("is_anomaly")).clone()
 
-    if flagged.is_empty():
-        # Fallback: take the 5 rows with the largest absolute rate change
-        flagged = anomalies.sort("rate_change").head(top_n)
+    if len(flagged) < min_n:
+        needed = min_n - len(flagged)
+        rest = (
+            anomalies.filter(~pl.col("is_anomaly"))
+            .sort("estimated_revenue_impact_usd", descending=True)
+            .head(needed)
+        )
+        flagged = pl.concat([flagged, rest])
 
     # ---- Normalised sub-scores ----
     impact_norm = _normalise_column(flagged["estimated_revenue_impact_usd"])
