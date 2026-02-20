@@ -31,10 +31,10 @@ Update your section when you start, make progress, or finish. **Always commit + 
 
 ### Session B: Pipeline
 - **Branch:** `feature/pipeline`
-- **Status:** NOT STARTED
-- **Files:** `src/pipeline/ingest.py`, `src/pipeline/transform.py`, `src/pipeline/segment.py`
+- **Status:** COMPLETE
+- **Files:** `src/pipeline/ingest.py`, `src/pipeline/transform.py`, `src/pipeline/segment.py`, `src/pipeline/__main__.py`
 - **Output:** `data/processed/segments.parquet`, `data/processed/weekly_trends.parquet`
-- **Notes:**
+- **Notes:** 11 segment types × (6 weeks + 2 half-periods + 1 overall) = 2,652 segment rows. Both outputs match SEGMENT_SCHEMA and WEEKLY_TREND_SCHEMA exactly. Reads real 8,000-row data from Session A. CLI: `python -m src.pipeline`. Approval story confirmed: weeks 1-3 ~81%, weeks 4-6 ~62%.
 
 ### Session C: Analytics
 - **Branch:** `feature/analytics`
@@ -52,8 +52,8 @@ Update your section when you start, make progress, or finish. **Always commit + 
 
 ## Integration Checklist
 
-- [ ] Data generator produces valid parquet matching `RAW_TRANSACTION_SCHEMA`
-- [ ] Pipeline reads raw data and outputs segments + trends
+- [x] Data generator produces valid parquet matching `RAW_TRANSACTION_SCHEMA`
+- [x] Pipeline reads raw data and outputs segments + trends
 - [ ] Analytics reads segments and outputs ranked insights + anomalies
 - [ ] Visualization reads all layers and produces dashboard
 - [ ] CLI entrypoint runs full pipeline end-to-end
