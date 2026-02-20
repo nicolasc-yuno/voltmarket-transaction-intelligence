@@ -210,21 +210,24 @@ def _random_issuer(country: str) -> str:
 
 
 def _random_amount(country: str) -> tuple[float, float]:
-    """Return (local_amount, amount_usd)."""
-    # Target USD range 10-500, then convert to local
+    """Return (local_amount, amount_usd).
+
+    Generates amount_usd in [10, 500] so that the high-value threshold
+    (>$200 USD) and AMOUNT_BUCKETS are meaningful across all countries.
+    Local currency is derived as amount_usd / fx_rate.
+    """
     amount_usd = float(RNG.uniform(10, 500))
     fx = COUNTRIES[country]["fx_rate"]
-    # local = usd / fx
     local_amount = round(amount_usd / fx, 2)
-    return round(local_amount, 2), round(amount_usd, 2)
+    return local_amount, round(amount_usd, 2)
 
 
 def _random_timestamp(week: int) -> datetime:
     """Return a random timestamp within the given week (1-indexed)."""
     week_start = START_DATE + timedelta(weeks=week - 1)
     day_offset = int(RNG.integers(0, DAYS_PER_WEEK))
-    # Simulate realistic hourly traffic: peak 10-22h
-    # Use a mixture: 30% late night (0-6), 10% early morning (6-10), 60% daytime (10-22)
+    # Simulate realistic hourly traffic
+    # Use a mixture: 10% late night (0-6), 10% early morning (6-10), 80% daytime (10-24)
     r = RNG.random()
     if r < 0.10:
         hour = int(RNG.integers(0, 6))
@@ -275,7 +278,7 @@ def generate_transactions() -> pl.DataFrame:
 
             status = "approved" if approved else "declined"
             decline_reason = (
-                ""
+                None
                 if approved
                 else pick_decline_reason(country, issuer_bank, amount_usd, hour, week)
             )
