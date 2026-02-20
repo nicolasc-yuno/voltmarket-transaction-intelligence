@@ -42,11 +42,12 @@ RAW_OUTPUT_PATH = "data/raw/transactions.parquet"
 
 # Segmented approval rates - one row per unique segment combination
 SEGMENT_SCHEMA = {
-    "segment_type": pl.Utf8,           # time_weekly, country, card_brand, issuer, amount_bucket, hour_bucket, composite
+    "segment_type": pl.Utf8,           # time_weekly, country, card_brand, card_type, issuer, amount_bucket, hour_bucket, country_brand, country_brand_type, issuer_brand_type
     "segment_key": pl.Utf8,            # Human-readable key: "MX|Mastercard|Debit|BBVA"
     "dimension_1": pl.Utf8,            # First dimension value
     "dimension_2": pl.Utf8,            # Second dimension value (nullable)
     "dimension_3": pl.Utf8,            # Third dimension value (nullable)
+    "dimension_4": pl.Utf8,            # Fourth dimension value (nullable, used by issuer_brand_type)
     "period": pl.Utf8,                 # "week_1", "week_2", ..., "weeks_1_3", "weeks_4_6", "all"
     "total_transactions": pl.Int64,
     "approved_transactions": pl.Int64,
@@ -106,6 +107,11 @@ ANOMALY_SCHEMA = {
 }
 
 ANOMALIES_OUTPUT_PATH = "data/analytics/anomalies.parquet"
+SUMMARY_OUTPUT_PATH = "data/analytics/summary.json"
+
+# Revenue impact normalisation constants
+WEEKS_PER_PERIOD = 3      # Each baseline/current window covers 3 weeks
+WEEKS_PER_MONTH = 4.33    # Multiplier to convert weekly impact to monthly
 
 
 # =============================================================================
@@ -138,7 +144,7 @@ DECLINE_REASONS = [
     "fraud_suspected",
 ]
 
-AMOUNT_BUCKETS = ["$10-50", "$50-100", "$100-200", "$200-350", "$350-500"]
+AMOUNT_BUCKETS = ["sub_$10", "$10-50", "$50-100", "$100-200", "$200-350", "$350-500"]
 HOUR_BUCKETS = ["morning_6_12", "afternoon_12_17", "evening_17_20", "night_20_24", "late_night_0_6"]
 
 # Target approval rates for data generation (the "story")

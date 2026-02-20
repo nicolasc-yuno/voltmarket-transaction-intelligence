@@ -37,6 +37,7 @@ def main() -> None:
 
     # Write outputs
     Path(SEGMENT_OUTPUT_PATH).parent.mkdir(parents=True, exist_ok=True)
+    Path(WEEKLY_TREND_OUTPUT_PATH).parent.mkdir(parents=True, exist_ok=True)
     segments.write_parquet(SEGMENT_OUTPUT_PATH)
     trends.write_parquet(WEEKLY_TREND_OUTPUT_PATH)
 
