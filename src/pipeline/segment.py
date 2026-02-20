@@ -23,6 +23,16 @@ SEGMENT_DEFINITIONS = {
     "issuer_brand_type":  ["country", "issuer_bank", "card_brand", "card_type"],
 }
 
+# Segments that require pre-filtering to declined-only rows before grouping.
+# decline_reason is null on approved transactions, so grouping the full dataset
+# would produce a single null bucket containing all approved volume — not useful.
+# Filtering to declined rows yields the distribution of decline reasons over time,
+# which is the actionable signal for diagnosing approval rate degradation.
+DECLINED_ONLY_SEGMENT_DEFINITIONS = {
+    "decline_reason":         ["decline_reason"],
+    "country_decline_reason": ["country", "decline_reason"],
+}
+
 
 def _segment_key(dims: list[str]) -> pl.Expr:
     """Build a pipe-separated human-readable key from dimension columns."""
@@ -101,15 +111,27 @@ def _segments_for_type(df: pl.DataFrame, segment_type: str, dims: list[str]) -> 
     return pl.concat(frames)
 
 
+def _declined_df(df: pl.DataFrame) -> pl.DataFrame:
+    """Return only declined transactions (rows where decline_reason is not null)."""
+    return df.filter(pl.col("decline_reason").is_not_null())
+
+
 def build_segments(df: pl.DataFrame) -> pl.DataFrame:
     """
     Run all segment definitions and return a combined DataFrame
     matching SEGMENT_SCHEMA.
     """
     all_segments = []
+
     for segment_type, dims in SEGMENT_DEFINITIONS.items():
         seg = _segments_for_type(df, segment_type, dims)
         all_segments.append(seg)
+
+    declined = _declined_df(df)
+    for segment_type, dims in DECLINED_ONLY_SEGMENT_DEFINITIONS.items():
+        seg = _segments_for_type(declined, segment_type, dims)
+        all_segments.append(seg)
+
     result = pl.concat(all_segments)
     # Cast to exact schema types
     for col, dtype in SEGMENT_SCHEMA.items():
