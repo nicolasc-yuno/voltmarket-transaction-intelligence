@@ -5,8 +5,6 @@ Runs the full ingestion + segmentation + trend pipeline.
 
 from pathlib import Path
 
-import polars as pl
-
 from src.contracts.schemas import SEGMENT_OUTPUT_PATH, WEEKLY_TREND_OUTPUT_PATH
 from src.pipeline.ingest import load_transactions
 from src.pipeline.segment import build_segments
