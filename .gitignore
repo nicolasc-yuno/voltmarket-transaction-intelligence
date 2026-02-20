@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (generated, not committed)
+data/raw/*.parquet
+data/raw/*.csv
+data/processed/*.parquet
+data/processed/*.csv
+data/analytics/*.parquet
+data/analytics/*.csv
+data/analytics/*.json
+
+# Output artifacts (screenshots, reports)
+output/*.html
+output/*.png
+output/*.json
+
+# Environment
+.env

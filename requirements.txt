@@ -1,0 +1,18 @@
+# Core
+polars>=1.0.0
+numpy>=1.26.0
+
+# Data Generation
+faker>=28.0.0
+
+# Analytics
+scipy>=1.13.0
+
+# Visualization
+plotly>=5.22.0
+streamlit>=1.37.0
+kaleido>=0.2.1      # Plotly static image export
+
+# Utilities
+click>=8.1.0        # CLI entrypoint
+rich>=13.7.0        # Pretty console output
