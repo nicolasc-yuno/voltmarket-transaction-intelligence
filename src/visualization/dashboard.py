@@ -9,8 +9,8 @@ from __future__ import annotations
 import streamlit as st
 
 from src.visualization.charts import (
-    ALL_CHARTS,
-    build_mock_insights,
+    _load_or_mock,
+    build_mock_weekly_trends,
     chart_amount_distribution,
     chart_country_breakdown,
     chart_headline_trend,
@@ -19,8 +19,13 @@ from src.visualization.charts import (
     chart_waterfall,
     export_all_png,
     export_standalone_html,
+    load_insights,
 )
-from src.contracts.schemas import BASELINE_APPROVAL_RATE, DEGRADED_APPROVAL_RATE
+from src.contracts.schemas import (
+    BASELINE_APPROVAL_RATE,
+    DEGRADED_APPROVAL_RATE,
+    WEEKLY_TREND_OUTPUT_PATH,
+)
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -37,71 +42,63 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* Header */
     .main-header {
         background: linear-gradient(135deg, #2c3e50, #3498db);
-        color: white;
-        padding: 28px 32px;
-        border-radius: 12px;
-        margin-bottom: 20px;
+        color: white; padding: 28px 32px; border-radius: 12px; margin-bottom: 20px;
     }
     .main-header h1 { margin: 0 0 6px 0; font-size: 28px; }
     .main-header .sub { font-size: 15px; opacity: 0.9; }
-
-    /* KPI cards */
     .kpi-card {
-        background: white;
-        border-radius: 10px;
-        padding: 18px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        background: white; border-radius: 10px; padding: 18px;
+        text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
     }
     .kpi-value { font-size: 34px; font-weight: 700; }
     .kpi-label { font-size: 13px; color: #7f8c8d; margin-top: 2px; }
-
-    /* Insight cards */
     .insight-card {
-        background: white;
-        border-radius: 10px;
-        padding: 18px 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-        border-left: 5px solid;
-        height: 100%;
+        background: white; border-radius: 10px; padding: 18px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-left: 5px solid; height: 100%;
     }
     .insight-card.critical { border-left-color: #e74c3c; }
     .insight-card.high { border-left-color: #e67e22; }
     .insight-card.medium { border-left-color: #f1c40f; }
     .severity-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: white;
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 11px; font-weight: 700; text-transform: uppercase; color: white;
     }
     .severity-badge.critical { background: #e74c3c; }
     .severity-badge.high { background: #e67e22; }
     .severity-badge.medium { background: #f1c40f; color: #2c3e50; }
     .metric-value { font-size: 22px; font-weight: 700; color: #e74c3c; margin: 6px 0 4px; }
     .impact-text { font-size: 12px; color: #7f8c8d; }
-
-    /* Section dividers */
     .section-title {
-        color: #2c3e50;
-        font-size: 20px;
-        font-weight: 600;
-        margin: 28px 0 12px;
-        padding-bottom: 6px;
-        border-bottom: 2px solid #ecf0f1;
+        color: #2c3e50; font-size: 20px; font-weight: 600;
+        margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #ecf0f1;
     }
-
-    /* Hide default Streamlit elements for cleaner look */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display: none;}
 </style>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Load data for KPIs
+# ---------------------------------------------------------------------------
+weekly_df = _load_or_mock(WEEKLY_TREND_OUTPUT_PATH, build_mock_weekly_trends)
+if len(weekly_df) > 0:
+    sorted_wdf = weekly_df.sort("week_number")
+    current_rate = sorted_wdf["approval_rate"][-1]
+    baseline_rate = sorted_wdf["approval_rate"][0]
+else:
+    current_rate = DEGRADED_APPROVAL_RATE
+    baseline_rate = BASELINE_APPROVAL_RATE
+
+decline_pp = round((current_rate - baseline_rate) * 100)
+
+insights_df = load_insights()
+if len(insights_df) > 0 and "estimated_revenue_impact_usd" in insights_df.columns:
+    total_impact = sum(insights_df["estimated_revenue_impact_usd"].to_list())
+else:
+    total_impact = 430000
 
 # ---------------------------------------------------------------------------
 # Header
@@ -114,35 +111,35 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# KPI row
+# KPI row (data-driven)
 # ---------------------------------------------------------------------------
 k1, k2, k3, k4 = st.columns(4)
 
 with k1:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
-        <div class="kpi-value" style="color:#e74c3c">64%</div>
+        <div class="kpi-value" style="color:#e74c3c">{current_rate * 100:.0f}%</div>
         <div class="kpi-label">Current Approval Rate</div>
     </div>""", unsafe_allow_html=True)
 
 with k2:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
-        <div class="kpi-value" style="color:#2c3e50">82%</div>
+        <div class="kpi-value" style="color:#2c3e50">{baseline_rate * 100:.0f}%</div>
         <div class="kpi-label">Baseline (Weeks 1-3)</div>
     </div>""", unsafe_allow_html=True)
 
 with k3:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
-        <div class="kpi-value" style="color:#e74c3c">-18pp</div>
+        <div class="kpi-value" style="color:#e74c3c">{decline_pp:+d}pp</div>
         <div class="kpi-label">Rate Decline</div>
     </div>""", unsafe_allow_html=True)
 
 with k4:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
-        <div class="kpi-value" style="color:#e67e22">~$1.2M</div>
+        <div class="kpi-value" style="color:#e67e22">~${total_impact / 1_000_000:.1f}M</div>
         <div class="kpi-label">Est. Monthly Impact</div>
     </div>""", unsafe_allow_html=True)
 
@@ -163,11 +160,10 @@ with col_right:
     st.plotly_chart(chart_issuer_heatmap(), use_container_width=True)
 
 # ---------------------------------------------------------------------------
-# Key Findings — Insight cards
+# Key Findings — Insight cards (data-driven)
 # ---------------------------------------------------------------------------
 st.markdown('<div class="section-title">Key Findings</div>', unsafe_allow_html=True)
 
-insights_df = build_mock_insights()
 card_cols = st.columns(min(len(insights_df), 5))
 
 for i in range(min(len(insights_df), 5)):
@@ -182,7 +178,7 @@ for i in range(min(len(insights_df), 5)):
     with card_cols[i]:
         st.markdown(f"""
         <div class="insight-card {severity}">
-            <span class="severity-badge {severity}">{severity}</span>
+            <span class="severity-badge {severity}">{severity.upper()}</span>
             <h4 style="margin:8px 0 4px; font-size:14px;">{row['title']}</h4>
             <div class="metric-value">{baseline_pct} &rarr; {current_pct} ({change_pp})</div>
             <div class="impact-text">Est. impact: {impact} | {txns} txns</div>
