@@ -21,32 +21,6 @@ from src.contracts.schemas import (
 )
 
 
-def _amount_bucket(amount_usd: float) -> str:
-    if amount_usd < 50:
-        return AMOUNT_BUCKETS[0]   # $10-50
-    elif amount_usd < 100:
-        return AMOUNT_BUCKETS[1]   # $50-100
-    elif amount_usd < 200:
-        return AMOUNT_BUCKETS[2]   # $100-200
-    elif amount_usd < 350:
-        return AMOUNT_BUCKETS[3]   # $200-350
-    else:
-        return AMOUNT_BUCKETS[4]   # $350-500
-
-
-def _hour_bucket(hour: int) -> str:
-    if 6 <= hour < 12:
-        return HOUR_BUCKETS[0]   # morning_6_12
-    elif 12 <= hour < 17:
-        return HOUR_BUCKETS[1]   # afternoon_12_17
-    elif 17 <= hour < 20:
-        return HOUR_BUCKETS[2]   # evening_17_20
-    elif 20 <= hour < 24:
-        return HOUR_BUCKETS[3]   # night_20_24
-    else:
-        return HOUR_BUCKETS[4]   # late_night_0_6
-
-
 def _generate_mock_data(n: int = 200) -> pl.DataFrame:
     """Generate mock transactions matching RAW_TRANSACTION_SCHEMA for dev use."""
     import datetime
@@ -92,8 +66,7 @@ def _generate_mock_data(n: int = 200) -> pl.DataFrame:
         })
 
     schema = {k: v for k, v in RAW_TRANSACTION_SCHEMA.items()}
-    df = pl.DataFrame(rows, schema=schema)
-    return df
+    return pl.DataFrame(rows, schema=schema)
 
 
 def _validate_schema(df: pl.DataFrame) -> None:
@@ -102,25 +75,42 @@ def _validate_schema(df: pl.DataFrame) -> None:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}")
         actual = df[col].dtype
-        if actual != dtype:
+        # For Datetime, compare only time_unit — ignore optional timezone
+        if isinstance(dtype, pl.Datetime):
+            if not isinstance(actual, pl.Datetime) or actual.time_unit != dtype.time_unit:
+                raise TypeError(f"Column '{col}': expected {dtype}, got {actual}")
+        elif actual != dtype:
             raise TypeError(f"Column '{col}': expected {dtype}, got {actual}")
 
 
 def _add_derived_columns(df: pl.DataFrame) -> pl.DataFrame:
-    """Add amount_bucket, hour_bucket, period_half."""
-    df = df.with_columns([
-        pl.col("amount_usd").map_elements(
-            _amount_bucket, return_dtype=pl.Utf8
-        ).alias("amount_bucket"),
-        pl.col("hour_of_day").map_elements(
-            _hour_bucket, return_dtype=pl.Utf8
-        ).alias("hour_bucket"),
+    """Add amount_bucket, hour_bucket, period_half using native Polars expressions."""
+    # AMOUNT_BUCKETS = ["sub_$10", "$10-50", "$50-100", "$100-200", "$200-350", "$350-500"]
+    amount_bucket = (
+        pl.when(pl.col("amount_usd") < 10).then(pl.lit(AMOUNT_BUCKETS[0]))
+          .when(pl.col("amount_usd") < 50).then(pl.lit(AMOUNT_BUCKETS[1]))
+          .when(pl.col("amount_usd") < 100).then(pl.lit(AMOUNT_BUCKETS[2]))
+          .when(pl.col("amount_usd") < 200).then(pl.lit(AMOUNT_BUCKETS[3]))
+          .when(pl.col("amount_usd") < 350).then(pl.lit(AMOUNT_BUCKETS[4]))
+          .otherwise(pl.lit(AMOUNT_BUCKETS[5]))
+          .alias("amount_bucket")
+    )
+    # HOUR_BUCKETS = ["morning_6_12", "afternoon_12_17", "evening_17_20", "night_20_24", "late_night_0_6"]
+    hour_bucket = (
+        pl.when((pl.col("hour_of_day") >= 6) & (pl.col("hour_of_day") < 12)).then(pl.lit(HOUR_BUCKETS[0]))
+          .when((pl.col("hour_of_day") >= 12) & (pl.col("hour_of_day") < 17)).then(pl.lit(HOUR_BUCKETS[1]))
+          .when((pl.col("hour_of_day") >= 17) & (pl.col("hour_of_day") < 20)).then(pl.lit(HOUR_BUCKETS[2]))
+          .when((pl.col("hour_of_day") >= 20) & (pl.col("hour_of_day") < 24)).then(pl.lit(HOUR_BUCKETS[3]))
+          .otherwise(pl.lit(HOUR_BUCKETS[4]))
+          .alias("hour_bucket")
+    )
+    period_half = (
         pl.when(pl.col("week_number") <= 3)
           .then(pl.lit("weeks_1_3"))
           .otherwise(pl.lit("weeks_4_6"))
-          .alias("period_half"),
-    ])
-    return df
+          .alias("period_half")
+    )
+    return df.with_columns([amount_bucket, hour_bucket, period_half])
 
 
 def load_transactions() -> pl.DataFrame:
@@ -135,4 +125,5 @@ def load_transactions() -> pl.DataFrame:
     else:
         print(f"[ingest] {RAW_OUTPUT_PATH} not found — generating mock data (200 rows)")
         df = _generate_mock_data(200)
+        _validate_schema(df)  # validate mock data too
     return _add_derived_columns(df)

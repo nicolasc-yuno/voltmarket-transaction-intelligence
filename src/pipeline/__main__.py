@@ -5,8 +5,6 @@ Runs the full ingestion + segmentation + trend pipeline.
 
 from pathlib import Path
 
-import polars as pl
-
 from src.contracts.schemas import SEGMENT_OUTPUT_PATH, WEEKLY_TREND_OUTPUT_PATH
 from src.pipeline.ingest import load_transactions
 from src.pipeline.segment import build_segments
@@ -37,6 +35,7 @@ def main() -> None:
 
     # Write outputs
     Path(SEGMENT_OUTPUT_PATH).parent.mkdir(parents=True, exist_ok=True)
+    Path(WEEKLY_TREND_OUTPUT_PATH).parent.mkdir(parents=True, exist_ok=True)
     segments.write_parquet(SEGMENT_OUTPUT_PATH)
     trends.write_parquet(WEEKLY_TREND_OUTPUT_PATH)
 

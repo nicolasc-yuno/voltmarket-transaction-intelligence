@@ -20,7 +20,6 @@ SEGMENT_DEFINITIONS = {
     "hour_bucket":        ["hour_bucket"],
     "country_brand":      ["country", "card_brand"],
     "country_brand_type": ["country", "card_brand", "card_type"],
-    "country_issuer":     ["country", "issuer_bank"],
     "issuer_brand_type":  ["country", "issuer_bank", "card_brand", "card_type"],
 }
 
@@ -50,7 +49,7 @@ def _compute_agg(group_df: pl.DataFrame, group_cols: list[str], period_value: st
         .group_by(group_cols)
         .agg([
             pl.len().alias("total_transactions"),
-            (pl.col("status") == "approved").sum().alias("approved_transactions"),
+            (pl.col("status") == "approved").sum().cast(pl.Int64).alias("approved_transactions"),
             pl.col("amount_usd").sum().alias("total_amount_usd"),
             pl.when(pl.col("status") == "approved")
               .then(pl.col("amount_usd"))
@@ -64,12 +63,13 @@ def _compute_agg(group_df: pl.DataFrame, group_cols: list[str], period_value: st
             _dim_expr(group_cols, 0),
             _dim_expr(group_cols, 1),
             _dim_expr(group_cols, 2),
+            _dim_expr(group_cols, 3),
             pl.lit(period_value).alias("period"),
-            (pl.col("total_transactions") - pl.col("approved_transactions")).alias("declined_transactions"),
+            (pl.col("total_transactions").cast(pl.Int64) - pl.col("approved_transactions")).alias("declined_transactions"),
             (pl.col("approved_transactions").cast(pl.Float64) / pl.col("total_transactions").cast(pl.Float64))
               .alias("approval_rate"),
         ])
-        .cast({"total_transactions": pl.Int64, "approved_transactions": pl.Int64, "declined_transactions": pl.Int64})
+        .cast({"total_transactions": pl.Int64, "declined_transactions": pl.Int64})
         .select(list(SEGMENT_SCHEMA.keys()))
     )
     return agg
